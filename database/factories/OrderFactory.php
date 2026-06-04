@@ -2,29 +2,35 @@
 
 namespace Database\Factories;
 
+use App\Enums\OrderStatus;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Order>
  */
 class OrderFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
+        $subtotal = fake()->randomFloat(2, 20, 1000);
+
         return [
-            'user_id' => User::query()->inRandomOrder()->value('id') ?? User::factory(),
-            'order_number' => 'ORD-' . now()->format('YmdHis') . '-' . fake()->unique()->numberBetween(1000, 9999),
-            'status' => 'pending',
-            'subtotal' => fake()->randomFloat(2, 20, 1000),
-            'total' => fake()->randomFloat(2, 20, 1000),
-            'paid_at' => null,
-            'cancelled_at' => null,
+            'user_id'      => User::factory(),
+            'order_number' => 'ORD-' . now()->format('YmdHis') . '-' . Str::random(6),
+            'status'       => OrderStatus::Pending,
+            'subtotal'     => $subtotal,
+            'total'        => $subtotal,
+            'paid_at'      => null,
         ];
+    }
+
+    public function paid(): static
+    {
+        return $this->state([
+            'status'  => OrderStatus::Paid,
+            'paid_at' => now(),
+        ]);
     }
 }

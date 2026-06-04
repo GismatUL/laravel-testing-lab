@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\NotificationStatus;
+use App\Enums\NotificationType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class NotificationLog extends Model
 {
@@ -20,20 +23,26 @@ class NotificationLog extends Model
         'message',
         'payload',
         'sent_at',
-        'failure_reason',
+        'failed_at',
     ];
 
-    protected $casts = [
-        'payload' => 'array',
-        'sent_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'type'      => NotificationType::class,
+            'status'    => NotificationStatus::class,
+            'payload'   => 'array',
+            'sent_at'   => 'datetime',
+            'failed_at' => 'datetime',
+        ];
+    }
 
-    public function user()
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    public function order()
+    public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
