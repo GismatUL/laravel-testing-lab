@@ -11,23 +11,18 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class OrderItemFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
-        $product = Product::query()->inRandomOrder()->first() ?? Product::factory()->create();
-        $quantity = fake()->numberBetween(1, 5);
+        $unitPrice = fake()->randomFloat(2, 5, 200);
+        $quantity  = fake()->numberBetween(1, 5);
 
         return [
-            'order_id' => Order::query()->inRandomOrder()->value('id') ?? Order::factory(),
-            'product_id' => $product->id,
-            'product_name' => $product->name,
-            'unit_price' => $product->price,
-            'quantity' => $quantity,
-            'total_price' => $product->price * $quantity,
+            'order_id'     => Order::factory(),
+            'product_id'   => Product::factory(),
+            'product_name' => fake()->words(3, true),
+            'unit_price'   => $unitPrice,
+            'quantity'     => $quantity,
+            'total_price'  => round($unitPrice * $quantity, 2),
         ];
     }
 }

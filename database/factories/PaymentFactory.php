@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\PaymentProvider;
+use App\Enums\PaymentStatus;
 use App\Models\Order;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -11,23 +13,27 @@ use Illuminate\Support\Str;
  */
 class PaymentFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
         return [
-            'order_id' => Order::query()->inRandomOrder()->first() ?? Order::factory()->create(),
-            'payment_number' => 'PAY-' . now()->format('YmdHis') . '-' . fake()->unique()->numberBetween(1000, 9999),
-            'provider' => 'mock',
-            'status' => 'pending',
-            'amount' => fake()->randomFloat(2, 20, 1000),
-            'currency' => 'AZN',
-            'idempotency_key' => (string) Str::uuid(),
-            'provider_response' => null,
-            'paid_at' => null,
+            'order_id'          => Order::factory(),
+            'payment_number'    => 'PAY-' . now()->format('YmdHis') . '-' . Str::random(6),
+            'provider'          => PaymentProvider::Mock,
+            'status'            => PaymentStatus::Success,
+            'amount'            => fake()->randomFloat(2, 20, 1000),
+            'currency'          => 'AZN',
+            'idempotency_key'   => Str::uuid()->toString(),
+            'provider_response' => ['message' => 'Mock payment successful'],
+            'paid_at'           => now(),
         ];
+    }
+
+    public function failed(): static
+    {
+        return $this->state([
+            'status'            => PaymentStatus::Failed,
+            'paid_at'           => null,
+            'provider_response' => ['message' => 'Mock payment failed'],
+        ]);
     }
 }
