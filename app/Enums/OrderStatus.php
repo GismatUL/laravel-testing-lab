@@ -6,6 +6,7 @@ enum OrderStatus: string
 {
     case Pending = 'pending';
     case Processing = 'processing';
+    case Paid = 'paid';
     case Shipped = 'shipped';
     case Delivered = 'delivered';
     case Cancelled = 'cancelled';
@@ -17,6 +18,7 @@ enum OrderStatus: string
         return match($this) {
             self::Pending    => 'Pending',
             self::Processing => 'Processing',
+            self::Paid       => 'Paid',
             self::Shipped    => 'Shipped',
             self::Delivered  => 'Delivered',
             self::Cancelled  => 'Cancelled',
