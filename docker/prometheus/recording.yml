@@ -1,0 +1,23 @@
+# Task03 – recording rules: Prometheus evaluates these queries every 15 s
+# and stores the result as a new, cheap-to-query series. Use them for
+# expensive or repeated expressions (dashboards, alerts).
+#
+# Naming convention: level:metric:operation
+#   container:cpu_usage_cores:rate1m  = per container, CPU cores used, 1m rate
+
+groups:
+  - name: containers
+    rules:
+      # `group by (id, name) (...)` always has value 1, so multiplying by it
+      # only copies the `name` label onto the cAdvisor series (a "join").
+      - record: container:cpu_usage_cores:rate1m
+        expr: |
+          sum by (id) (rate(container_cpu_usage_seconds_total{id=~"/docker/.+"}[1m]))
+            * on (id) group_left (name)
+          group by (id, name) (up{job="docker-containers"})
+
+      - record: container:memory_working_set_bytes
+        expr: |
+          max by (id) (container_memory_working_set_bytes{id=~"/docker/.+"})
+            * on (id) group_left (name)
+          group by (id, name) (up{job="docker-containers"})

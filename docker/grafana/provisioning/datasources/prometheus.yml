@@ -1,0 +1,14 @@
+# Task03 – Grafana reads this at start-up: the Prometheus data source exists
+# without clicking through the UI ("configuration as code").
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy           # Grafana's backend queries Prometheus, not the browser
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s     # = scrape_interval, makes $__rate_interval correct

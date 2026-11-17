@@ -3,7 +3,7 @@ DOCKER_EXEC = docker compose exec app
 .PHONY: up down build restart shell logs \
         migrate fresh seed test artisan \
         cache-clear queue-work horizon \
-        es-index
+        es-index monitoring-up monitoring-down metrics
 
 # ── Container lifecycle ──────────────────────────────────────────────────────
 
@@ -59,3 +59,15 @@ horizon:
 
 es-index:
 	$(DOCKER_EXEC) php artisan products:index
+
+# ── Monitoring (Task03) ──────────────────────────────────────────────────────
+# Prometheus http://127.0.0.1:9090   Grafana http://127.0.0.1:3001
+
+monitoring-up:
+	docker compose --profile monitoring up -d
+
+monitoring-down:
+	docker compose --profile monitoring stop prometheus grafana redis-exporter postgres-exporter php-fpm-exporter cadvisor
+
+metrics:
+	docker compose exec nginx wget -qO- http://127.0.0.1:8080/metrics

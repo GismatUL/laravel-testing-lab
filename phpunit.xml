@@ -25,9 +25,11 @@
         <!-- Never send test exceptions to the real Sentry project. -->
         <env name="SENTRY_LARAVEL_DSN" value="" force="true"/>
         <server name="SENTRY_LARAVEL_DSN" value="" force="true"/>
+        <!-- Same for drivers: .env.docker sets redis/log, tests need isolated array/sync. -->
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="CACHE_STORE" value="array"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <server name="CACHE_STORE" value="array" force="true"/>
         <!-- <env name="DB_CONNECTION" value="sqlite"/> -->
         <!-- <env name="DB_DATABASE" value=":memory:"/> -->
         <!-- Integration tests run on real PostgreSQL + PostGIS, in a separate
@@ -38,10 +40,16 @@
              <server> entry is needed as well. -->
         <env name="DB_DATABASE" value="laravel_testing" force="true"/>
         <server name="DB_DATABASE" value="laravel_testing" force="true"/>
-        <env name="MAIL_MAILER" value="array"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <server name="MAIL_MAILER" value="array" force="true"/>
+        <!-- Metrics live in memory during tests (never in the dev Redis). -->
+        <env name="METRICS_STORAGE" value="memory" force="true"/>
+        <server name="METRICS_STORAGE" value="memory" force="true"/>
         <env name="PULSE_ENABLED" value="false"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <server name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <server name="SESSION_DRIVER" value="array" force="true"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
     </php>
 </phpunit>

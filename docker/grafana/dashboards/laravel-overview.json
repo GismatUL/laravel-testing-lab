@@ -1,0 +1,150 @@
+{
+  "uid": "laravel-overview",
+  "title": "Laravel – Overview",
+  "description": "Task03: traffic, errors, latency, queues and resources of laravel-testing-lab.",
+  "tags": ["laravel", "task03"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "editable": true,
+  "panels": [
+    { "type": "row", "title": "Golden signals (traffic, errors, latency)", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+
+    {
+      "type": "stat", "title": "Requests / s", "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [{ "refId": "A", "expr": "sum(rate(laravel_http_requests_total[$__rate_interval]))" }]
+    },
+    {
+      "type": "stat", "title": "Error rate (5xx)", "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.01 }, { "color": "red", "value": 0.05 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [{ "refId": "A", "expr": "(sum(rate(laravel_http_requests_total{status=~\"5..\"}[$__rate_interval])) or vector(0)) / sum(rate(laravel_http_requests_total[$__rate_interval]))" }]
+    },
+    {
+      "type": "stat", "title": "p95 latency", "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3,
+        "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.5 }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(laravel_http_request_duration_seconds_bucket[$__rate_interval])))" }]
+    },
+    {
+      "type": "stat", "title": "Jobs waiting", "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short",
+        "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 50 }, { "color": "red", "value": 100 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [{ "refId": "A", "expr": "sum(laravel_queue_size{state=\"pending\"})" }]
+    },
+
+    {
+      "type": "timeseries", "title": "Requests / s by status", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 20 } }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "sum by (status) (rate(laravel_http_requests_total[$__rate_interval]))", "legendFormat": "{{status}}" }]
+    },
+    {
+      "type": "timeseries", "title": "Latency percentiles (all routes)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le) (rate(laravel_http_request_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(laravel_http_request_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p95" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum by (le) (rate(laravel_http_request_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "type": "timeseries", "title": "p95 latency by route (top 5)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "topk(5, histogram_quantile(0.95, sum by (le, route) (rate(laravel_http_request_duration_seconds_bucket[$__rate_interval]))))", "legendFormat": "{{route}}" }]
+    },
+    {
+      "type": "timeseries", "title": "5xx / s by route", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "fixed", "fixedColor": "red" } }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "sum by (route) (rate(laravel_http_requests_total{status=~\"5..\"}[$__rate_interval]))", "legendFormat": "{{route}}" }]
+    },
+
+    { "type": "row", "title": "Queues", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 } },
+    {
+      "type": "timeseries", "title": "Queue size", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "laravel_queue_size", "legendFormat": "{{queue}} {{state}}" }]
+    },
+    {
+      "type": "timeseries", "title": "Jobs / s by outcome", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "sum by (queue, status) (rate(laravel_queue_jobs_total[$__rate_interval]))", "legendFormat": "{{queue}} {{status}}" }]
+    },
+    {
+      "type": "timeseries", "title": "Job duration p95", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, job) (rate(laravel_queue_job_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "{{job}}" }]
+    },
+
+    { "type": "row", "title": "Resources (CPU, memory)", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 } },
+    {
+      "type": "timeseries", "title": "Container CPU (1.0 = one core)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "container:cpu_usage_cores:rate1m", "legendFormat": "{{name}}" }]
+    },
+    {
+      "type": "timeseries", "title": "Container memory (working set)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "container:memory_working_set_bytes", "legendFormat": "{{name}}" }]
+    },
+    {
+      "type": "timeseries", "title": "PHP-FPM workers", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 39 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(phpfpm_active_processes)", "legendFormat": "active" },
+        { "refId": "B", "expr": "sum(phpfpm_idle_processes)", "legendFormat": "idle" },
+        { "refId": "C", "expr": "sum(phpfpm_listen_queue)", "legendFormat": "waiting for a worker" }
+      ]
+    },
+    {
+      "type": "timeseries", "title": "Peak PHP memory per request (p95)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 39 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, route) (rate(laravel_http_request_peak_memory_bytes_bucket[$__rate_interval])))", "legendFormat": "{{route}}" }]
+    },
+
+    { "type": "row", "title": "Data stores", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 47 } },
+    {
+      "type": "timeseries", "title": "PostgreSQL connections", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 48 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "pg_stat_database_numbackends{datname=~\"laravel.*\"}", "legendFormat": "{{datname}}" }]
+    },
+    {
+      "type": "timeseries", "title": "PostgreSQL cache hit ratio", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 48 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "sum(rate(pg_stat_database_blks_hit{datname=\"laravel\"}[$__rate_interval])) / (sum(rate(pg_stat_database_blks_hit{datname=\"laravel\"}[$__rate_interval])) + sum(rate(pg_stat_database_blks_read{datname=\"laravel\"}[$__rate_interval])))", "legendFormat": "hit ratio" }]
+    },
+    {
+      "type": "timeseries", "title": "Redis memory and commands", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 48 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" },
+        "overrides": [ { "matcher": { "id": "byName", "options": "commands/s" }, "properties": [ { "id": "unit", "value": "ops" }, { "id": "custom.axisPlacement", "value": "right" } ] } ] },
+      "targets": [
+        { "refId": "A", "expr": "redis_memory_used_bytes", "legendFormat": "used memory" },
+        { "refId": "B", "expr": "rate(redis_commands_processed_total[$__rate_interval])", "legendFormat": "commands/s" }
+      ]
+    }
+  ]
+}
