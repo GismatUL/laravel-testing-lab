@@ -39,9 +39,10 @@ use Illuminate\Support\Facades\DB;
  *  2. SELECT ... FOR UPDATE OF c SKIP LOCKED on the courier candidate: two
  *     requests for DIFFERENT orders that want the same courier don't block
  *     each other; the second one simply skips the locked courier and takes the
- *     next-nearest one. (Plain FOR UPDATE would make B wait for A's commit,
- *     then re-check the row, find it busy and return NOTHING even though
- *     courier 8 was free. SKIP LOCKED is the standard job-queue pattern.)
+ *     next-nearest one. (Plain FOR UPDATE is also correct but makes B WAIT
+ *     for A's commit, then re-check the row, find it busy and move on: all
+ *     requests near the same courier are serialised. SKIP LOCKED is the
+ *     standard job-queue pattern.)
  *
  *  3. The partial UNIQUE index delivery_orders_one_active_order_per_courier:
  *     a database-level guarantee that survives bugs in layers 1-2, manual SQL,
