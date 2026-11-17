@@ -57,3 +57,33 @@ Route::prefix('delivery')->group(function () {
     Route::get('/reports/monthly',      [ReportController::class, 'monthly']);
     Route::get('/reports/top-couriers', [ReportController::class, 'topCouriers']);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Task03 – Monitoring lab: deliberate production problems
+|--------------------------------------------------------------------------
+| Full URLs: /api/v1/lab/... Hidden (404) unless LAB_ENABLED=true, the
+| environment is not production and the X-Lab-Token header matches
+| LAB_TOKEN (see config/lab.php). Rate limiters: ObservabilityServiceProvider.
+*/
+Route::prefix('lab')
+    ->middleware([\App\Http\Middleware\EnsureLabEnabled::class, 'throttle:lab'])
+    ->controller(\App\Http\Controllers\Api\V1\Lab\LabController::class)
+    ->group(function () {
+        Route::get('/', 'index');
+        Route::get('/slow', 'slow');
+        Route::get('/n-plus-one', 'nPlusOne');
+        Route::get('/exception', 'throwException');
+        Route::post('/logs', 'logs');
+        Route::post('/jobs/failing', 'failingJob');
+        Route::post('/jobs/failing/fix', 'fixFailingJob');
+        Route::post('/jobs/long-running', 'longRunningJob');
+
+        // Heavy: they load the database, the queue, RAM or a CPU core.
+        Route::middleware('throttle:lab-heavy')->group(function () {
+            Route::get('/expensive-sql', 'expensiveSql');
+            Route::post('/jobs/backlog', 'backlog');
+            Route::get('/memory', 'memory');
+            Route::get('/cpu', 'cpu');
+        });
+    });

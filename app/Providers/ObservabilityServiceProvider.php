@@ -7,7 +7,10 @@ use App\Support\Metrics\Metrics;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Prometheus\CollectorRegistry;
@@ -61,6 +64,10 @@ class ObservabilityServiceProvider extends ServiceProvider
             || self::isObservabilityAdmin($user));
 
         $this->recordQueueMetrics();
+
+        // Monitoring lab (routes/api.php, prefix /api/v1/lab).
+        RateLimiter::for('lab', fn (Request $request) => Limit::perMinute(config('lab.rate_limits.per_minute'))->by($request->ip()));
+        RateLimiter::for('lab-heavy', fn (Request $request) => Limit::perMinute(config('lab.rate_limits.heavy_per_minute'))->by($request->ip()));
     }
 
     /**

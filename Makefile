@@ -3,7 +3,7 @@ DOCKER_EXEC = docker compose exec app
 .PHONY: up down build restart shell logs \
         migrate fresh seed test artisan \
         cache-clear queue-work horizon \
-        es-index monitoring-up monitoring-down metrics
+        es-index monitoring-up monitoring-down metrics lab
 
 # ── Container lifecycle ──────────────────────────────────────────────────────
 
@@ -71,3 +71,11 @@ monitoring-down:
 
 metrics:
 	docker compose exec nginx wget -qO- http://127.0.0.1:8080/metrics
+
+# ── Monitoring lab (Task03) ──────────────────────────────────────────────────
+# make lab s=slow                     make lab s="n-plus-one?fixed=1"
+# make lab m=POST s=jobs/backlog      make lab m=POST s="jobs/failing?mode=flaky"
+LAB_TOKEN = $(shell grep '^LAB_TOKEN=' .env.docker | cut -d= -f2)
+
+lab:
+	@curl -s -X $(or $(m),GET) -H "Accept: application/json" -H "X-Lab-Token: $(LAB_TOKEN)" "http://localhost:8000/api/v1/lab/$(s)"; echo
