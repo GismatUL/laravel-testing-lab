@@ -6,6 +6,7 @@ RUN apk add --no-cache \
     libpng-dev \
     libxml2-dev \
     oniguruma-dev \
+    postgresql-dev \
     zip \
     unzip \
     git \
@@ -16,7 +17,7 @@ RUN apk add --no-cache \
 # PHP extensions
 RUN docker-php-ext-install \
     pdo \
-    pdo_mysql \
+    pdo_pgsql \
     mbstring \
     exif \
     pcntl \

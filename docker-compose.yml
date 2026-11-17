@@ -1,23 +1,61 @@
+# Shared definition for every container that runs the Laravel code base
+# (php-fpm + background processes). One image, different commands.
+x-laravel: &laravel
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+  image: laravel-testing-lab-app:latest
+  restart: unless-stopped
+  working_dir: /var/www
+  env_file:
+    - .env.docker
+  volumes:
+    - .:/var/www
+    - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
+  networks:
+    - laravel
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_started
+
 services:
   app:
-    build:
-      context: .
-      dockerfile: docker/php/Dockerfile
+    <<: *laravel
     container_name: laravel_app
-    restart: unless-stopped
-    working_dir: /var/www
-    env_file:
-      - .env.docker
-    volumes:
-      - .:/var/www
-      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
-    networks:
-      - laravel
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_started
+
+  # ── Background processes (Task03) ─────────────────────────────────────────
+  # Each one is a separate container so it can be restarted, scaled and
+  # monitored on its own: the "one process per container" rule.
+
+  # Queue workers. Horizon starts and supervises the worker pools defined in
+  # config/horizon.php (supervisor-1 = app queues, lab = experiments).
+  horizon:
+    <<: *laravel
+    container_name: laravel_horizon
+    command: php artisan horizon
+    # On `docker compose stop`, SIGTERM lets Horizon finish the jobs it is
+    # running (up to the 60 s job timeout) before exiting.
+    stop_signal: SIGTERM
+    stop_grace_period: 70s
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Runs routes/console.php schedules (horizon:snapshot, pruning) every minute.
+  scheduler:
+    <<: *laravel
+    container_name: laravel_scheduler
+    command: php artisan schedule:work
+
+  # Feeds Pulse's "Servers" card (CPU, memory, disk) every few seconds.
+  pulse:
+    <<: *laravel
+    container_name: laravel_pulse
+    command: php artisan pulse:check
 
   nginx:
     image: nginx:1.25-alpine
@@ -33,23 +71,23 @@ services:
     depends_on:
       - app
 
-  mysql:
-    image: mysql:8.0
-    container_name: laravel_mysql
+  postgres:
+    image: postgis/postgis:17-3.5-alpine
+    container_name: laravel_postgres
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: laravel
-      MYSQL_USER: laravel
-      MYSQL_PASSWORD: secret
-      MYSQL_ROOT_PASSWORD: secret
+      POSTGRES_DB: laravel
+      POSTGRES_USER: laravel
+      POSTGRES_PASSWORD: secret
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - laravel
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "pg_isready -U laravel -d laravel"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -66,10 +104,26 @@ services:
     networks:
       - laravel
 
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: laravel_elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - laravel
+
 networks:
   laravel:
     driver: bridge
 
 volumes:
-  mysql_data:
+  postgres_data:
   redis_data:
+  elasticsearch_data:

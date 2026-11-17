@@ -2,7 +2,8 @@ DOCKER_EXEC = docker compose exec app
 
 .PHONY: up down build restart shell logs \
         migrate fresh seed test artisan \
-        cache-clear queue-work horizon
+        cache-clear queue-work horizon \
+        es-index
 
 # ── Container lifecycle ──────────────────────────────────────────────────────
 
@@ -55,3 +56,6 @@ queue-work:
 
 horizon:
 	$(DOCKER_EXEC) php artisan horizon
+
+es-index:
+	$(DOCKER_EXEC) php artisan products:index
