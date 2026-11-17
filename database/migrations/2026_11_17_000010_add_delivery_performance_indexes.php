@@ -64,7 +64,7 @@ return new class extends Migration
             WHERE status = 'delivered'");
 
         // 5) PARTIAL GiST on pickup_location for pending orders only.
-        //    Pending is ~2-8% of rows and every spatial search over orders is
+        //    Pending is ~7.5% of rows (pg_stats) and every spatial search over orders is
         //    about pending ones ("orders waiting near me"). The partial index is
         //    a fraction of the size of a full one. It only gets used when the
         //    query's WHERE clause implies status = 'pending'.

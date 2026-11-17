@@ -45,7 +45,7 @@ class CreateDeliveryOrderTest extends DeliveryTestCase
         ])->json('data.id');
 
         // ST_X = longitude, ST_Y = latitude. If someone swaps the arguments of
-        // ST_MakePoint, this point lands in Iran (lat 49.87, lng 40.41).
+        // ST_MakePoint, this point lands in southern Russia (lat 49.87, lng 40.41).
         $row = DB::selectOne(
             'SELECT ST_X(pickup_location::geometry) AS x, ST_Y(pickup_location::geometry) AS y FROM delivery_orders WHERE id = ?',
             [$id],

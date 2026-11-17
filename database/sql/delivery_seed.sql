@@ -28,7 +28,7 @@ SELECT 'Customer ' || g,
        now() - random() * interval '400 days'
 FROM generate_series(1, 20000) AS g;
 
--- 150 duplicate customers (same email, different letter case) to practise
+-- 151 duplicate customers (same email, different letter case) to practise
 -- "find duplicate customer records based on email".
 INSERT INTO customers (name, email, created_at)
 SELECT 'Customer ' || g || ' (dup)',

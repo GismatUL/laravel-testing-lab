@@ -11,8 +11,8 @@ use InvalidArgumentException;
  *
  * The constructor takes (latitude, longitude) because that is how humans and
  * the API speak, but PostGIS ALWAYS wants X = longitude, Y = latitude.
- * Keeping that conversion in exactly one place (toSqlExpression) is how you
- * avoid the #1 PostGIS bug: swapped coordinates that put Baku in Iran.
+ * Keeping that conversion in exactly one place (SQL + bindings(), toExpression()) is how you
+ * avoid the #1 PostGIS bug: swapped coordinates that put Baku in southern Russia.
  */
 final class GeoPoint
 {
