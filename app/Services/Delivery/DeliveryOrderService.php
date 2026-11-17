@@ -90,7 +90,8 @@ class DeliveryOrderService
             ->filter($filters)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->cursorPaginate($perPage);
+            ->cursorPaginate($perPage)
+            ->withQueryString(); // keep filters + per_page in the next/prev links
     }
 
     /**
