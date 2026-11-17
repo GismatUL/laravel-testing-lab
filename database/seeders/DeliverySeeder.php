@@ -19,6 +19,18 @@ class DeliverySeeder extends Seeder
 
         DB::unprepared(file_get_contents(database_path('sql/delivery_seed.sql')));
 
+        // ANALYZE: refresh planner statistics (row counts, most-common values,
+        //   histograms). Right after a bulk load the planner would otherwise
+        //   estimate with stale numbers and pick bad plans.
+        // VACUUM: marks pages "all-visible" in the visibility map. Without it,
+        //   an Index Only Scan still has to visit the heap for every row
+        //   ("Heap Fetches: N" in EXPLAIN) and loses its advantage.
+        // Autovacuum would do both eventually; we do it now so EXPLAIN output
+        // is representative immediately.
+        foreach (['customers', 'couriers', 'delivery_orders', 'delivery_order_status_history'] as $table) {
+            DB::statement("VACUUM ANALYZE {$table}");
+        }
+
         $counts = DB::selectOne('
             SELECT (SELECT count(*) FROM customers)                     AS customers,
                    (SELECT count(*) FROM couriers)                      AS couriers,

@@ -137,12 +137,7 @@ UPDATE delivery_orders o
  WHERE h.order_id = o.id;
 
 -- -----------------------------------------------------------------------------
--- 6. ANALYZE: refresh planner statistics (row counts, value distributions,
---    most-common values). After a bulk load the planner would otherwise work
---    with stale/empty stats and choose bad plans. Autovacuum would do this
---    eventually; doing it explicitly makes EXPLAIN results reliable NOW.
+-- 6. VACUUM ANALYZE runs AFTER this script (see DeliverySeeder.php) because
+--    VACUUM cannot run inside a transaction block, and a multi-statement
+--    string sent in one round-trip is executed as one implicit transaction.
 -- -----------------------------------------------------------------------------
-ANALYZE customers;
-ANALYZE couriers;
-ANALYZE delivery_orders;
-ANALYZE delivery_order_status_history;
