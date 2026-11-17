@@ -17,12 +17,17 @@ class SendOrderNotificationJob implements ShouldQueue
     public int $tries = 3;
     public array $backoff = [30, 60, 120];
     public int $timeout = 30;
-    public string $queue = 'notifications';
 
     public function __construct(
         public readonly int $orderId,
         public readonly string $message,
-    ) {}
+    ) {
+        // Not `public string $queue = '...'`: the Queueable trait already
+        // declares an untyped `$queue` property, and PHP refuses to compose a
+        // class where trait and class declare the same property differently
+        // (fatal error at class load, so the job could never even be dispatched).
+        $this->onQueue('notifications');
+    }
 
     public function handle(): void
     {

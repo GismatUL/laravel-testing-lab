@@ -98,6 +98,9 @@ return [
 
     'waits' => [
         'redis:default' => 60,
+        'redis:notifications' => 60,
+        // Lab backlog scenario floods this queue on purpose; alert later.
+        'redis-long:lab' => 300,
     ],
 
     /*
@@ -196,17 +199,35 @@ return [
     |
     */
 
+    /*
+     * Two supervisors = two independent worker pools (Task03):
+     *
+     *  supervisor-1  real application queues. Listed in priority order:
+     *                Horizon serves `notifications` before `default`.
+     *  lab           monitoring experiments (1000-job backlog, failing,
+     *                long-running, memory/CPU-heavy jobs). Its own pool and
+     *                its own connection (`redis-long`, higher retry_after),
+     *                so a flooded or stuck lab queue can never starve real
+     *                work. This is the "bulkhead" pattern.
+     *
+     * Rule: a supervisor's `timeout` must be a few seconds SHORTER than the
+     * connection's `retry_after`, otherwise a still-running job is handed to a
+     * second worker and executes twice.
+     *   redis      retry_after 90   -> timeout 60
+     *   redis-long retry_after 330  -> timeout 300
+     */
     'defaults' => [
         'supervisor-1' => [
             'connection' => 'redis',
-            'queue' => ['default'],
+            'queue' => ['notifications', 'default'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
+            'minProcesses' => 1,
             'maxProcesses' => 1,
-            'maxTime' => 0,
-            'maxJobs' => 0,
+            'maxTime' => 3600,  // recycle workers hourly (guards against slow memory leaks)
+            'maxJobs' => 1000,
             'memory' => 128,
-            'tries' => 1,
+            'tries' => 1,       // jobs may override with their own $tries
             'timeout' => 60,
             'nice' => 0,
         ],
@@ -219,11 +240,27 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            // No `lab` supervisor here: lab jobs must never run in production.
+            // (Horizon rejects minProcesses = 0, so "disabling" means "not defined".)
         ],
 
+        // Kept small on purpose: this lab runs on a memory-constrained laptop.
         'local' => [
             'supervisor-1' => [
-                'maxProcesses' => 3,
+                'maxProcesses' => 2,
+            ],
+            'lab' => [
+                'connection' => 'redis-long',
+                'queue' => ['lab'],
+                'balance' => 'simple',
+                'minProcesses' => 1,
+                'maxProcesses' => 2,
+                'maxTime' => 3600,
+                'maxJobs' => 0,
+                'memory' => 192,    // the memory scenario uses up to ~150 MB
+                'tries' => 1,
+                'timeout' => 300,
+                'nice' => 5,        // lower OS priority than real work
             ],
         ],
     ],

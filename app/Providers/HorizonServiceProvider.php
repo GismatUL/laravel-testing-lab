@@ -27,10 +27,8 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
      */
     protected function gate(): void
     {
-        Gate::define('viewHorizon', function ($user = null) {
-            return in_array(optional($user)->email, [
-                //
-            ]);
-        });
+        // Same allow-list as Telescope and Pulse (config/observability.php).
+        // In `local`, Horizon itself allows everyone before reaching this gate.
+        Gate::define('viewHorizon', fn ($user = null) => ObservabilityServiceProvider::isObservabilityAdmin($user));
     }
 }
