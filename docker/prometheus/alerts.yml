@@ -1,0 +1,70 @@
+# Task03 – alert rules. Prometheus evaluates them every 15 s; their state
+# (inactive -> pending -> firing) is visible at http://127.0.0.1:9090/alerts.
+#
+# In production Prometheus sends firing alerts to Alertmanager, which
+# groups, silences and routes them (Slack, PagerDuty, e-mail). Alertmanager
+# is not installed in this lab: the rules page is enough to learn the flow.
+#
+# `for:` = the condition must hold that long before firing. It filters out
+# one-off spikes, so nobody is paged for a single slow request.
+
+groups:
+  - name: laravel
+    rules:
+      - alert: LaravelDown
+        expr: up{job="laravel"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Prometheus cannot scrape Laravel /metrics"
+
+      - alert: HighErrorRate
+        # share of 5xx responses over the last 5 minutes
+        expr: |
+          sum(rate(laravel_http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(laravel_http_requests_total[5m])) > 0.05
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "More than 5% of HTTP requests fail with 5xx"
+
+      - alert: SlowRequestsP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, route) (rate(laravel_http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 latency of {{ $labels.route }} is above 1 s"
+
+      - alert: QueueBacklog
+        expr: laravel_queue_size{state="pending"} > 100
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} jobs waiting on {{ $labels.connection }}:{{ $labels.queue }}"
+
+      - alert: JobsFailing
+        expr: sum by (job) (increase(laravel_queue_jobs_total{status="failed"}[10m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Job {{ $labels.job }} failed in the last 10 minutes"
+
+  - name: infrastructure
+    rules:
+      - alert: PhpFpmSaturated
+        # requests waiting because every FPM worker is busy
+        expr: phpfpm_listen_queue > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "PHP-FPM has requests queued: all workers busy (raise pm.max_children?)"
+
+      - alert: ContainerHighMemory
+        expr: |
+          container:memory_working_set_bytes > 1.5e9
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.name }} uses more than 1.5 GB"

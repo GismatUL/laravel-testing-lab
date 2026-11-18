@@ -72,6 +72,17 @@ return [
             'after_commit' => false,
         ],
 
+        // Task03: same Redis, longer retry_after for long-running lab jobs.
+        // Horizon's `lab` supervisor uses timeout 300 (< 330, see config/horizon.php).
+        'redis-long' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'lab',
+            'retry_after' => 330,
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
     ],
 
     /*

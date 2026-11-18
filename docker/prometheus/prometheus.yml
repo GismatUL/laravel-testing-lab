@@ -1,0 +1,80 @@
+# Task03 – Prometheus pulls ("scrapes") metrics from every target every
+# scrape_interval and stores them as time series on its own disk.
+#
+# Targets are addressed by Docker service name: none of them is published
+# to the host, they are only reachable from inside the `laravel` network.
+
+global:
+  scrape_interval: 15s       # how often to pull
+  evaluation_interval: 15s   # how often to evaluate alert rules
+
+rule_files:
+  - /etc/prometheus/recording.yml
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # Laravel: HTTP requests, latency, queue size, job duration (our code).
+  # Via nginx's internal listener, see docker/nginx/conf.d/metrics.conf.
+  - job_name: laravel
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["nginx:8080"]
+
+  # PHP-FPM worker pool: active/idle processes, listen queue.
+  - job_name: php-fpm
+    static_configs:
+      - targets: ["php-fpm-exporter:9253"]
+
+  # Redis: memory, connected clients, commands/sec, keys per DB.
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # PostgreSQL: connections, transactions, cache hit ratio, locks.
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  # Per-container CPU and memory, labelled id="/docker/<container id>".
+  - job_name: cadvisor
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # Container id -> name lookup table (Docker Desktop workaround, see the
+  # cadvisor comment in docker-compose.yml).
+  #
+  # Docker service discovery lists running containers through the read-only
+  # socket proxy. Each laravel_* container becomes a target whose labels are
+  # {id="/docker/<id>", name="laravel_app"}. The scrape itself just hits
+  # Prometheus' own /metrics and every sample is dropped; what remains is the
+  # synthetic `up{job="docker-containers", id, name}` series, which the
+  # recording rules in recording.yml join with cAdvisor's metrics.
+  - job_name: docker-containers
+    scrape_interval: 60s
+    docker_sd_configs:
+      - host: tcp://docker-socket-proxy:2375
+        refresh_interval: 60s
+    relabel_configs:
+      - source_labels: [__meta_docker_container_name]
+        regex: /(laravel_.*)
+        action: keep
+      - source_labels: [__meta_docker_container_name]
+        regex: /(.*)
+        target_label: name
+      - source_labels: [__meta_docker_container_id]
+        target_label: id
+        replacement: /docker/$1
+      - source_labels: [name]
+        target_label: instance
+      - target_label: __address__
+        replacement: localhost:9090
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: .+
+        action: drop
+
+  # Prometheus monitors itself (scrape durations, TSDB size).
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

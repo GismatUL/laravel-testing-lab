@@ -14,10 +14,10 @@ class NotificationService
         return NotificationLog::create([
             'user_id' => $order->user_id,
             'order_id' => $order->id,
-            'type' => NotificationType::OrderPaid->value,
+            'type' => NotificationType::Email->value,
             'channel' => 'email',
             'recipient' => $order->user->email,
-            'status' => NotificationStatus::Pending->value,
+            'status' => NotificationStatus::Unread->value,
             'message' => "Your order {$order->order_number} has been paid successfully.",
             'payload' => [
                 'order_number' => $order->order_number,

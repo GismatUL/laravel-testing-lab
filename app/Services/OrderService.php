@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\CartStatus;
 use App\Enums\OrderStatus;
+use App\Events\OrderCreated;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,7 @@ class OrderService
 
     public function createFromCart(User $user): Order
     {
-        return DB::transaction(function () use ($user) {
+        $order = DB::transaction(function () use ($user) {
             $cart = $this->cartService
                 ->getActiveCart($user)
                 ->load('items.product');
@@ -30,11 +31,11 @@ class OrderService
             $subtotal = $cart->items->sum('total_price');
 
             $order = Order::create([
-                'user_id' => $user->id,
+                'user_id'      => $user->id,
                 'order_number' => 'ORD-' . now()->format('YmdHis') . '-' . Str::random(6),
-                'status' => OrderStatus::Pending->value,
-                'subtotal' => $subtotal,
-                'total' => $subtotal,
+                'status'       => OrderStatus::Pending->value,
+                'subtotal'     => $subtotal,
+                'total'        => $subtotal,
             ]);
 
             foreach ($cart->items as $item) {
@@ -47,19 +48,21 @@ class OrderService
                 $product->decrement('stock', $item->quantity);
 
                 $order->items()->create([
-                    'product_id' => $product->id,
+                    'product_id'   => $product->id,
                     'product_name' => $product->name,
-                    'unit_price' => $item->unit_price,
-                    'quantity' => $item->quantity,
-                    'total_price' => $item->total_price,
+                    'unit_price'   => $item->unit_price,
+                    'quantity'     => $item->quantity,
+                    'total_price'  => $item->total_price,
                 ]);
             }
 
-            $cart->update([
-                'status' => CartStatus::Converted->value,
-            ]);
+            $cart->update(['status' => CartStatus::Converted->value]);
 
             return $order->fresh('items.product');
         });
+
+        OrderCreated::dispatch($order);
+
+        return $order;
     }
 }

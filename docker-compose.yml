@@ -1,0 +1,278 @@
+# Shared definition for every container that runs the Laravel code base
+# (php-fpm + background processes). One image, different commands.
+x-laravel: &laravel
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+  image: laravel-testing-lab-app:latest
+  restart: unless-stopped
+  working_dir: /var/www
+  env_file:
+    - .env.docker
+  volumes:
+    - .:/var/www
+    - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    # Task03: PHP-FPM status page for php-fpm_exporter (read by php-fpm only).
+    - ./docker/php/fpm-status.conf:/usr/local/etc/php-fpm.d/zz-status.conf:ro
+  networks:
+    - laravel
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_started
+
+services:
+  app:
+    <<: *laravel
+    container_name: laravel_app
+
+  # ── Background processes (Task03) ─────────────────────────────────────────
+  # Each one is a separate container so it can be restarted, scaled and
+  # monitored on its own: the "one process per container" rule.
+
+  # Queue workers. Horizon starts and supervises the worker pools defined in
+  # config/horizon.php (supervisor-1 = app queues, lab = experiments).
+  horizon:
+    <<: *laravel
+    container_name: laravel_horizon
+    command: php artisan horizon
+    # On `docker compose stop`, SIGTERM lets Horizon finish the jobs it is
+    # running (up to the 60 s job timeout) before exiting.
+    stop_signal: SIGTERM
+    stop_grace_period: 70s
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Runs routes/console.php schedules (horizon:snapshot, pruning) every minute.
+  scheduler:
+    <<: *laravel
+    container_name: laravel_scheduler
+    command: php artisan schedule:work
+
+  # Feeds Pulse's "Servers" card (CPU, memory, disk) every few seconds.
+  pulse:
+    <<: *laravel
+    container_name: laravel_pulse
+    command: php artisan pulse:check
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: laravel_nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+    networks:
+      - laravel
+    depends_on:
+      - app
+
+  postgres:
+    image: postgis/postgis:17-3.5-alpine
+    container_name: laravel_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: laravel
+      POSTGRES_USER: laravel
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - laravel
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U laravel -d laravel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: laravel_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - laravel
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: laravel_elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - laravel
+
+  # ── Metrics stack (Task03 phase 5) ────────────────────────────────────────
+  # Opt-in profile, so a plain `docker compose up -d` stays light:
+  #   docker compose --profile monitoring up -d     (or: make monitoring-up)
+  #
+  # Access rules:
+  #   - Prometheus and Grafana are published on 127.0.0.1 only: reachable from
+  #     this laptop, not from the local network.
+  #   - Exporters publish nothing: only Prometheus (same Docker network) can
+  #     reach them.
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: laravel_prometheus
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d    # lab data: one week is plenty
+      - --storage.tsdb.retention.size=1GB
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/recording.yml:/etc/prometheus/recording.yml:ro
+      - ./docker/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    mem_limit: 384m
+    networks:
+      - laravel
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: laravel_grafana
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      # Set GRAFANA_ADMIN_PASSWORD in your (git-ignored) .env to override.
+      # With the default, Grafana asks you to change it at first login.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    mem_limit: 256m
+    depends_on:
+      - prometheus
+    networks:
+      - laravel
+
+  # Translates Redis INFO into Prometheus metrics.
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: laravel_redis_exporter
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    mem_limit: 64m
+    networks:
+      - laravel
+
+  # Translates pg_stat_* views into Prometheus metrics.
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: laravel_postgres_exporter
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://laravel:secret@postgres:5432/laravel?sslmode=disable
+    mem_limit: 64m
+    networks:
+      - laravel
+
+  # Reads the PHP-FPM status page over FastCGI (docker/php/fpm-status.conf).
+  php-fpm-exporter:
+    image: hipages/php-fpm_exporter:2.2.0
+    container_name: laravel_php_fpm_exporter
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    environment:
+      PHP_FPM_SCRAPE_URI: tcp://app:9000/fpm-status
+    mem_limit: 32m
+    networks:
+      - laravel
+
+  # Per-container CPU / memory / network, read from the host's cgroups.
+  #
+  # Docker Desktop note: with the containerd image store (driver "overlayfs")
+  # cAdvisor's Docker integration cannot resolve containers ("failed to
+  # identify the read-write layer ID"). So it runs in raw-cgroup mode: series
+  # are labelled id="/docker/<container id>" and Prometheus attaches the
+  # container *name* via Docker service discovery (see prometheus.yml and
+  # recording.yml). On a Linux server with overlay2, plain cAdvisor adds a
+  # `name` label itself and this workaround is not needed.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    container_name: laravel_cadvisor
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    privileged: true
+    command:
+      - --docker_only=false
+      - --docker=unix:///nonexistent.sock      # skip the broken Docker integration
+      - --containerd=/nonexistent.sock
+      - --raw_cgroup_prefix_whitelist=/docker/ # only container cgroups (+ "/" = whole VM)
+      - --housekeeping_interval=15s
+      - --store_container_labels=false
+      # Drop expensive metric groups we don't graph (keeps cAdvisor small).
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp,disk,diskIO
+    volumes:
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+    mem_limit: 256m
+    networks:
+      - laravel
+
+  # Read-only gateway to the Docker API for Prometheus service discovery.
+  # Mounting docker.sock directly would give Prometheus root on the host;
+  # the proxy allows only GET /containers/* and GET /networks/* (service
+  # discovery reads both); everything else is rejected: no POST, no exec,
+  # no images, no volumes.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.2.0
+    container_name: laravel_docker_socket_proxy
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: 32m
+    networks:
+      - laravel
+
+networks:
+  laravel:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+  prometheus_data:
+  grafana_data:

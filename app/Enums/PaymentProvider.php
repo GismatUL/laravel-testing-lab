@@ -8,6 +8,7 @@ enum PaymentProvider: string
     case PayPal = 'paypal';
     case Razorpay = 'razorpay';
     case Manual = 'manual';
+    case Mock = 'mock';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum PaymentProvider: string
             self::PayPal   => 'PayPal',
             self::Razorpay => 'Razorpay',
             self::Manual   => 'Manual',
+            self::Mock     => 'Mock',
         };
     }
 }

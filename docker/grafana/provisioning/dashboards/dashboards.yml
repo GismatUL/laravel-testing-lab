@@ -1,0 +1,12 @@
+# Task03 – load every dashboard JSON from docker/grafana/dashboards.
+# Edit dashboards in the UI, then "Export -> JSON" and save the file here so
+# the change is reviewed in git like any other code.
+apiVersion: 1
+
+providers:
+  - name: laravel-testing-lab
+    folder: Laravel
+    type: file
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
